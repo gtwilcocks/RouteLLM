@@ -19,6 +19,11 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
+import litellm
+
+# Set litellm to drop unsupported parameters
+litellm.drop_params = True
+
 from routellm.controller import Controller, RoutingError
 from routellm.routers.routers import ROUTER_CLS
 
@@ -145,7 +150,6 @@ async def health_check():
     """Health check endpoint."""
     return JSONResponse(content={"status": "online"})
 
-
 parser = argparse.ArgumentParser(
     description="An OpenAI-compatible API server for LLM routing."
 )
@@ -192,3 +196,25 @@ if __name__ == "__main__":
         host="0.0.0.0",
         workers=args.workers,
     )
+
+# GW: Workaround for to return a list of models by returning the routers instead
+# TODO: Threshold hard coded for now
+@app.get("/v1/models")
+async def get_models():
+    """Get the list of available models."""
+    routers = CONTROLLER.routers.keys()
+    threshold = "0.11593"  # Hardcoded threshold for now
+
+    # Convert routers to the required model object JSON format
+    models = [
+        {
+            "id": "router-" + str(router) + "-" + threshold,  # Ensure the ID is a string
+            "object": "model",
+            "created": int(time.time()),
+            "owned_by": "openai",
+        }
+        for router in routers
+        
+    ]
+
+    return JSONResponse(content=models)
